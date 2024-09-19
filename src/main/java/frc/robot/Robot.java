@@ -8,6 +8,10 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.wpilibj.Timer;
 
 public class Robot extends TimedRobot {
   private final XboxController m_controller = new XboxController(0);
@@ -18,9 +22,52 @@ public class Robot extends TimedRobot {
   private final SlewRateLimiter m_yspeedLimiter = new SlewRateLimiter(3);
   private final SlewRateLimiter m_rotLimiter = new SlewRateLimiter(3);
 
+   // Limelight NetworkTables
+  private NetworkTable limelightTable;
+
+   // Timer to control the duration of movement
+  private Timer driveTimer = new Timer();
+
+  // Store the AprilTag ID from SmartDashboard
+  private int selectedAprilTagID;
+
+  @Override
+  public void robotInit() {
+    limelightTable = NetworkTableInstance.getDefault().getTable("limelight");
+    
+    // Add an AprilTag ID selector to SmartDashboard
+    SmartDashboard.putNumber("Target AprilTag ID", 0); // Default to 0 (no tag selected)
+  }
+
+  @Override
+  public void autonomousInit() {
+    // Reset the timer before starting autonomous
+    driveTimer.reset();
+    driveTimer.start();
+  }
+  
   @Override
   public void autonomousPeriodic() {
     driveWithJoystick(false);
+    m_swerve.updateOdometry();
+    
+    // Get the selected AprilTag ID from SmartDashboard
+    selectedAprilTagID = (int) SmartDashboard.getNumber("Target AprilTag ID", 0);
+
+    // Fetch AprilTag ID from Limelight
+    double[] aprilTagID = limelightTable.getEntry("tid").getDoubleArray(new double[0]);
+
+    // If the Limelight sees the selected AprilTag ID, move forward for 1 second
+    if (aprilTagID.length > 0 && aprilTagID[0] == selectedAprilTagID) {
+      if (driveTimer.get() <= 1.0) {  // Drive for one second
+        driveForward(0.2);  // Drive forward at 0.2 speed
+      } else {
+        m_swerve.stop();  // Stop after 1 second
+      }
+    } else {
+      m_swerve.stop();  // Stop if no tag detected or not the right tag
+    }
+
     m_swerve.updateOdometry();
   }
 
